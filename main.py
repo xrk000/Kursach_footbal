@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt, QSize, QDate
 from PyQt6.QtGui import QIcon
 
 
-
 class AddSekciiDialog(QDialog):
     def __init__(self):
         super().__init__()
@@ -1083,7 +1082,6 @@ class ScheduleDialog(QDialog):
         layout.addRow(button_layout)
 
         self.setLayout(layout)
-
 
 
 class PoseshhenieTab(QWidget):
