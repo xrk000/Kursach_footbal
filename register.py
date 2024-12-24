@@ -1,10 +1,10 @@
 import sys
-import main
 import subprocess
 import mysql.connector
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QPalette, QBrush
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QGridLayout, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QGridLayout, QVBoxLayout, \
+    QHBoxLayout, QMessageBox
 
 
 class Register(QWidget):
@@ -68,7 +68,7 @@ class Register(QWidget):
                 font-size: 40px;
                 width: 190px;
                 border: 5px solid #212595;
-                
+
             }
             QPushButton:hover {
                 background-color: #1118EB;
@@ -102,18 +102,18 @@ class Register(QWidget):
         self.setWindowTitle("Футбол")
         self.resize(1000, 700)
 
-
     def check_credentials(self, login, password):
         if not login or not password:
+            self.show_message("Ошибка", "Логин и пароль не могут быть пустыми.")
             return
 
         # Подключение к базе данных и проверка введенных данных
         try:
             conn = mysql.connector.connect(
-                host="127.0.0.1",
-                user="root",
-                password="123456qwerty",
-                database="cursovaya"
+                host="150.241.90.210",
+                user="korv",
+                password="rjHdbr54@3",
+                database="korvtestdb"
             )
             cursor = conn.cursor()
 
@@ -123,18 +123,25 @@ class Register(QWidget):
             result = cursor.fetchone()
 
             if result is None:
-                print("Неудачная попытка входа.")
+                self.show_message("Ошибка", "Неверный логин или пароль.")
             else:
-                print("Успешный вход.")
-
-                # Запуск файла main.py
-                subprocess.Popen(["python", "main.py"])
+                self.close()  # Закрыть окно регистрации
+                subprocess.Popen(["python", "main.py"])  # Запуск main.py
 
             cursor.close()
             conn.close()
 
         except mysql.connector.Error as e:
-            print(f"Ошибка базы данных: {e}")
+            self.show_message("Ошибка базы данных", f"Ошибка базы данных: {e}")
+
+    def show_message(self, title, message):
+        """Отображение сообщения в message box"""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Information if "Ошибка" not in title else QMessageBox.Icon.Critical)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.exec()
+
 
 if __name__ == "__main__":
     app = QApplication([])
