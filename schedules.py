@@ -1,14 +1,15 @@
 import mysql.connector
+import re
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget, QSpacerItem, QSizePolicy, \
     QMessageBox, QDialog, QFormLayout, QComboBox, QLineEdit, QDialogButtonBox, QApplication, QListWidgetItem, QDateEdit, \
     QTextEdit, QLabel
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import QSize, Qt, QDate
-
+from PyQt6.QtCore import QSize, Qt, QDate, QTime
 
 class RaspisanieTab(QWidget):
-    def __init__(self):
+    def __init__(self,main_window):
         super().__init__()
+        self.main_window = main_window  # Получаем доступ к основному окну
 
         self.conn = None
         self.cursor = None
@@ -21,6 +22,7 @@ class RaspisanieTab(QWidget):
         home_button = QPushButton()
         home_button.setIcon(QIcon('home.png'))
         home_button.setIconSize(QSize(30, 30))
+        home_button.clicked.connect(self.go_home)
         home_button.setStyleSheet("""
             QPushButton {
                 background-color: #2C6B3D;
@@ -34,7 +36,6 @@ class RaspisanieTab(QWidget):
                 transform: scale(1.1);
             }
         """)
-        home_button.clicked.connect(self.open_main_window)
         home_button_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         home_button_layout.addWidget(home_button)
         tab_layout.addLayout(home_button_layout)
@@ -194,14 +195,16 @@ class RaspisanieTab(QWidget):
 
         self.load_schedules_from_db()  # Загружаем расписания при старте
 
+    def go_home(self):
+        self.main_window.show_glavnoe_menu()
     def connect_to_db(self):
         """Подключение к базе данных"""
         try:
             self.conn = mysql.connector.connect(
-                host="127.0.0.1",
-                user="root",
-                password="123456qwerty",
-                database="cursovaya"
+                host="",
+                user="",
+                password="",
+                database=""
             )
             self.cursor = self.conn.cursor()
         except mysql.connector.Error as e:
@@ -220,7 +223,7 @@ class RaspisanieTab(QWidget):
             schedules = self.cursor.fetchall()
             for row in schedules:
                 schedule_id, event_date, event_time, group_name, venue = row
-                self.schedule_list.addItem(f"{event_date} | {event_time} | {group_name} | {venue}")
+                self.schedule_list.addItem(f"{schedule_id} | {event_date} | {event_time} | {group_name} | {venue}")
         except Exception as e:
             print(f"Error executing query: {e}")
 
@@ -239,7 +242,7 @@ class RaspisanieTab(QWidget):
             schedules = self.cursor.fetchall()
             for row in schedules:
                 schedule_id, event_date, event_time, group_name, venue = row
-                self.schedule_list.addItem(f"{event_date} | {event_time} | {group_name} | {venue}")
+                self.schedule_list.addItem(f"{schedule_id} | {event_date} | {event_time} | {group_name} | {venue}")
         except Exception as e:
             print(f"Error executing query: {e}")
 
@@ -260,95 +263,81 @@ class RaspisanieTab(QWidget):
         """Редактировать выбранное расписание"""
         current_item = self.schedule_list.currentItem()
         if current_item:
-            schedule_id = current_item.text().split(":")[0]
+            schedule_id = current_item.text()[0]
             dialog = ScheduleDialog(self, schedule_id)
             if dialog.exec():
                 event_date, event_time, group, venue = dialog.get_data()
-                query = """
-                    UPDATE schedules
-                    SET EventDate=%s, EventTime=%s, Group_ID=(SELECT Group_ID FROM groupsp WHERE Name=%s), Venue=%s
-                    WHERE Schedule_ID=%s
-                """
-                self.cursor.execute(query, (event_date, event_time, group, venue, schedule_id))
-                self.conn.commit()
-                self.load_schedules_for_selected_date()  # Обновляем список на выбранную дату
+
+                # Преобразование QDate в строку формата YYYY-MM-DD
+                if isinstance(event_date, QDate):
+                    event_date = event_date.toString("yyyy-MM-dd")
+
+                # Преобразование QTime в строку формата HH:MM:SS
+                if isinstance(event_time, QTime):
+                    event_time = event_time.toString("HH:mm:ss")
+
+                try:
+                    query = """
+                        UPDATE schedules
+                        SET EventDate=%s, EventTime=%s, Group_ID=(SELECT Group_ID FROM groupsp WHERE Name=%s), Venue=%s
+                        WHERE Schedule_ID=%s
+                    """
+                    schedule_id = schedule_id[0]
+                    print(schedule_id)
+                    self.cursor.execute(query, (event_date, event_time, group, venue, schedule_id))
+                    self.conn.commit()
+
+                    # Обновляем список расписаний
+                    self.load_schedules_for_selected_date()
+                except mysql.connector.Error as e:
+                    QMessageBox.critical(self, "Ошибка базы данных",
+                                         f"Произошла ошибка при обновлении расписания:\n{e}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Неизвестная ошибка", f"Произошла ошибка:\n{e}")
+
 
     def delete_schedule(self):
         """Удалить выбранное расписание"""
         current_item = self.schedule_list.currentItem()
         if current_item:
-            schedule_id = current_item.data(Qt.UserRole)  # Получаем ID расписания
-            event_details = current_item.text().split(' | ')  # Разделяем текст по разделителю
-
-            event_date = event_details[0]
-            event_time = event_details[1]
-            group_name = event_details[2]
-            venue = event_details[3]
-
             try:
-                print(f"Удаляем занятие с ID {schedule_id} ({event_date} {event_time} - {group_name} {venue})")
+                # Получение текста элемента
+                item_text = current_item.text()
+                print(f"Текст текущего элемента: {item_text}")
 
-                # Создаем кастомное окно подтверждения удаления
-                message_box = QMessageBox(self)
-                message_box.setWindowTitle("Удаление занятия")
-                message_box.setText(
-                    f"Вы уверены, что хотите удалить занятие '{event_date} {event_time} - {group_name} ({venue})'?")
-                message_box.setIcon(QMessageBox.Icon.Warning)
+                # Попытка извлечь идентификатор с помощью регулярных выражений
+                match = re.match(r'^\d+', item_text)  # Ищем число в начале строки
+                if not match:
+                    raise ValueError("Не удалось найти идентификатор расписания.")
 
-                # Устанавливаем кнопки
-                yes_button = message_box.addButton("Удалить", QMessageBox.ButtonRole.AcceptRole)
-                no_button = message_box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+                schedule_id = match.group()  # Получаем найденный идентификатор
+                print(f"Извлеченный Schedule_ID: {schedule_id}")
 
-                # Применяем стили для сообщения
-                message_box.setStyleSheet("""
-                    QMessageBox {
-                        font-family: 'Arial', sans-serif;
-                        font-size: 14px;
-                        background-color: #f5f5f5;
-                        border-radius: 8px;
-                        border: 1px solid #F44336;
-                    }
-                    QMessageBox QLabel {
-                        color: #333;
-                    }
-                    QPushButton {
-                        background-color: #F44336;
-                        color: white;
-                        padding: 10px;
-                        border-radius: 5px;
-                    }
-                    QPushButton:hover {
-                        background-color: #D32F2F;
-                    }
-                    QPushButton:pressed {
-                        background-color: #B71C1C;
-                    }
-                """)
+                # Проверка, что schedule_id является числом
+                if not schedule_id.isdigit():
+                    raise ValueError("Неверный формат идентификатора расписания. Ожидалось число.")
 
-                message_box.setDefaultButton(no_button)
-                message_box.exec()
+                # Выполнение запроса
+                query = "DELETE FROM schedules WHERE Schedule_ID = %s"
+                self.cursor.execute(query, (schedule_id,))
+                self.conn.commit()
 
-                if message_box.clickedButton() == yes_button:
-                    # Проверяем правильность запроса
-                    print("Подтверждено удаление, выполняем запрос.")
-                    # Удаление записи из расписания
-                    query = "DELETE FROM schedules WHERE Schedule_ID = %s"
-                    self.cursor.execute(query, (schedule_id,))
-                    self.conn.commit()
-
-                    self.load_schedules_for_selected_date()
-
+                QMessageBox.information(self, "Успех", f"Расписание с ID {schedule_id} успешно удалено.")
+                self.load_schedules_for_selected_date()  # Обновляем список на выбранную дату
             except mysql.connector.Error as e:
-                print(f"Ошибка удаления из базы данных: {e}")
-                QMessageBox.critical(self, "Ошибка удаления данных", str(e))
+                QMessageBox.critical(self, "Ошибка базы данных", f"Ошибка при удалении расписания: {e}")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Произошла ошибка: {e}")
+        else:
+            QMessageBox.warning(self, "Предупреждение", "Пожалуйста, выберите расписание для удаления.")
 
     def exit_application(self):
-        """Выход из приложения"""
-        QApplication.quit()
+        """Обработчик кнопки выхода с подтверждением"""
+        reply = QMessageBox.question(self, "Выход", "Вы уверены, что хотите выйти?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            QApplication.quit()
 
-    def open_main_window(self):
-        """Открытие главного окна"""
-        print("Открытие главного окна")
 
 class ScheduleDialog(QDialog):
     def __init__(self, parent, schedule_id=None):
@@ -362,7 +351,7 @@ class ScheduleDialog(QDialog):
 
         layout = QFormLayout()
 
-        # Поля ввода с улучшенным стилем
+        # Поле для выбора даты
         self.date_picker = QDateEdit(QDate.currentDate())
         self.date_picker.setDisplayFormat("dd.MM.yyyy")
         self.date_picker.setCalendarPopup(True)
@@ -376,29 +365,11 @@ class ScheduleDialog(QDialog):
             }
         """)
 
-        # Комбобокс для времени с маской ввода
-        self.time_combobox = QComboBox()
-        time_line_edit = QLineEdit()
-        time_line_edit.setInputMask("00:00")  # Маска ввода времени
-        time_line_edit.setPlaceholderText("Введите время (чч:мм)")
-        time_line_edit.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #388E3C;
-                border-radius: 8px;
-                padding: 10px;
-                font-size: 16px;
-                font-family: 'Arial', sans-serif;
-            }
-        """)
-        self.time_combobox.setLineEdit(time_line_edit)  # Устанавливаем кастомный LineEdit в ComboBox
-
-        self.group_combobox = QComboBox()
-        self.group_combobox.setStyleSheet(self.time_combobox.styleSheet())
-        self.load_groups()
-
-        self.place_input = QLineEdit()
-        self.place_input.setPlaceholderText("Введите место проведения")
-        self.place_input.setStyleSheet("""
+        # Поле для ввода времени с маской
+        self.time_input = QLineEdit()
+        self.time_input.setInputMask("00:00")  # Устанавливаем маску формата HH:MM
+        self.time_input.setPlaceholderText("Введите время (например, 14:30)")
+        self.time_input.setStyleSheet("""
             QLineEdit {
                 border: 2px solid #388E3C;
                 border-radius: 8px;
@@ -411,11 +382,31 @@ class ScheduleDialog(QDialog):
             }
         """)
 
+        self.group_combobox = QComboBox()
+        self.group_combobox.setStyleSheet("""
+            QComboBox {
+                border: 2px solid #388E3C;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 16px;
+                font-family: 'Arial', sans-serif;
+                background-color: #F9F9F9;
+            }
+            QComboBox:focus {
+                border-color: #FF9800;
+            }
+        """)
+        self.load_groups()
+
+        self.place_input = QLineEdit()
+        self.place_input.setPlaceholderText("Введите место проведения")
+        self.place_input.setStyleSheet(self.time_input.styleSheet())
+
         if schedule_id:
             self.load_schedule_data(schedule_id)
 
         layout.addRow(QLabel("Дата:"), self.date_picker)
-        layout.addRow(QLabel("Время:"), self.time_combobox)
+        layout.addRow(QLabel("Время:"), self.time_input)
         layout.addRow(QLabel("Группа:"), self.group_combobox)
         layout.addRow(QLabel("Место проведения:"), self.place_input)
 
@@ -470,7 +461,7 @@ class ScheduleDialog(QDialog):
         if result:
             event_date, event_time, group_id, venue = result
             self.date_picker.setDate(QDate.fromString(event_date, "yyyy-MM-dd"))
-            self.time_combobox.setCurrentText(event_time)
+            self.time_input.setText(event_time)
             self.set_group_combobox(group_id)
             self.place_input.setText(venue)
 
@@ -484,8 +475,7 @@ class ScheduleDialog(QDialog):
     def get_data(self):
         """Получить данные из формы"""
         event_date = self.date_picker.date().toString("yyyy-MM-dd")
-        event_time = self.time_combobox.lineEdit().text()  # Получаем текст из LineEdit
+        event_time = self.time_input.text()
         group = self.group_combobox.currentText()
         venue = self.place_input.text()
         return event_date, event_time, group, venue
-

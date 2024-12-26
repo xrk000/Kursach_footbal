@@ -6,8 +6,9 @@ from PyQt6.QtCore import QSize
 
 
 class GruppiTab(QWidget):
-    def __init__(self):
+    def __init__(self,main_window):
         super().__init__()
+        self.main_window = main_window  # Получаем доступ к основному окну
 
         self.conn = None
         self.cursor = None
@@ -191,7 +192,7 @@ class GruppiTab(QWidget):
                 transform: scale(1.05);
             }
         """)
-        exit_button.clicked.connect(QApplication.quit)
+        exit_button.clicked.connect(self.exit_application)
         exit_layout = QHBoxLayout()
         exit_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
         exit_layout.addWidget(exit_button)
@@ -228,10 +229,10 @@ class GruppiTab(QWidget):
     def connect_to_db(self):
         try:
             self.conn = mysql.connector.connect(
-                host="127.0.0.1",
-                user="root",
-                password="123456qwerty",
-                database="cursovaya"
+                host="",
+                user="",
+                password="",
+                database=""
             )
             self.cursor = self.conn.cursor()
         except mysql.connector.Error as e:
@@ -279,10 +280,11 @@ class GruppiTab(QWidget):
                 self.load_groups_from_db()  # Обновляем список групп
 
     def delete_gruppi(self):
+        """Обработчик кнопки удаления группы с подтверждением"""
         current_item = self.gruppi_list_left.currentItem()
         if current_item:
             group_id = current_item.text().split(":")[0]
-            reply = QMessageBox.question(self, "Удаление группы", "Вы уверены?",
+            reply = QMessageBox.question(self, "Удаление группы", "Вы уверены, что хотите удалить эту группу?",
                                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
                 query = "DELETE FROM groupsp WHERE Group_ID=%s"
@@ -290,8 +292,15 @@ class GruppiTab(QWidget):
                 self.conn.commit()
                 self.load_groups_from_db()  # Обновляем список групп
 
+    def exit_application(self):
+        """Обработчик кнопки выхода с подтверждением"""
+        reply = QMessageBox.question(self, "Выход", "Вы уверены, что хотите выйти?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            QApplication.quit()
+
     def open_main_window(self):
-        print("Открытие главного окна")
+        self.main_window.show_glavnoe_menu()
 
 class GruppiDialog(QDialog):
     def __init__(self, parent, cursor, group_id=None):

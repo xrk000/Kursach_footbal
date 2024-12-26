@@ -7,8 +7,9 @@ from PyQt6.QtCore import QSize, Qt, QDate
 
 
 class TrenerTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window):
         super().__init__()
+        self.main_window = main_window  # Получаем доступ к основному окну
 
         # Подключение к базе данных
         self.connect_to_db()
@@ -147,10 +148,10 @@ class TrenerTab(QWidget):
         """Подключаемся к базе данных."""
         try:
             self.conn = mysql.connector.connect(
-                host="127.0.0.1",
-                user="root",
-                password="123456qwerty",
-                database="cursovaya"
+                host="",
+                user="",
+                password="",
+                database=""
             )
             self.cursor = self.conn.cursor()
         except mysql.connector.Error as e:
@@ -160,7 +161,8 @@ class TrenerTab(QWidget):
         """Загружает тренеров из базы данных."""
         self.trener_list.clear()
         try:
-            self.cursor.execute("SELECT Coach_ID, Lastname, FirstName, MiddleName, BirthDate, Phone, Email FROM coaches")
+            self.cursor.execute(
+                "SELECT Coach_ID, Lastname, FirstName, MiddleName, BirthDate, Phone, Email FROM coaches")
             for row in self.cursor.fetchall():
                 coach_id, lastname, firstname, middlename, birthdate, phone, email = row
                 display_text = f"{lastname} {firstname} {middlename} | {birthdate} | {phone} | {email}"
@@ -184,46 +186,44 @@ class TrenerTab(QWidget):
                 QMessageBox.critical(self, "Ошибка добавления данных", str(e))
 
     def edit_trener(self):
-            current_item = self.trener_list.currentItem()
-            if current_item:
-                coach_id = current_item.data(Qt.ItemDataRole.UserRole)
-                try:
-                    self.cursor.execute(
-                        "SELECT Lastname, FirstName, MiddleName, BirthDate, Phone, Email FROM coaches WHERE Coach_ID=%s",
-                        (coach_id,)
-                    )
-                    data = self.cursor.fetchone()
-                    if data:
-                        lastname, firstname, middlename, birthdate, phone, email = data
+        current_item = self.trener_list.currentItem()
+        if current_item:
+            coach_id = current_item.data(Qt.ItemDataRole.UserRole)
+            try:
+                self.cursor.execute(
+                    "SELECT Lastname, FirstName, MiddleName, BirthDate, Phone, Email FROM coaches WHERE Coach_ID=%s",
+                    (coach_id,)
+                )
+                print(coach_id)
+                data = self.cursor.fetchone()
+                if data:
+                    lastname, firstname, middlename, birthdate, phone, email = data
 
-                        birthdate_qdate = QDate(birthdate)
+                    birthdate_qdate = QDate(birthdate)
 
-                        dialog = TrenerDialog((lastname, firstname, middlename, birthdate_qdate, phone, email))
-                        if dialog.exec() == QDialog.DialogCode.Accepted:
-                            lastname, firstname, middlename, birthdate, phone, email = dialog.get_data()
+                    dialog = TrenerDialog((lastname, firstname, middlename, birthdate_qdate, phone, email))
+                    if dialog.exec() == QDialog.DialogCode.Accepted:
+                        lastname, firstname, middlename, birthdate, phone, email = dialog.get_data()
 
-                            try:
-                                birthdate_qdate = QDate(birthdate)
-                                if not birthdate_qdate.isValid():
-                                    raise ValueError("Некорректная дата рождения!")
+                        try:
 
-                                query = """
+                            query = """
                                     UPDATE coaches 
                                     SET Lastname=%s, FirstName=%s, MiddleName=%s, BirthDate=%s, Phone=%s, Email=%s 
                                     WHERE Coach_ID=%s
                                 """
-                                self.cursor.execute(query,
-                                                    (lastname, firstname, middlename, birthdate, phone, email, coach_id))
-                                self.conn.commit()
-                                self.load_coaches()
-                            except ValueError as e:
-                                QMessageBox.critical(self, "Ошибка", str(e))
-                            except mysql.connector.Error as e:
-                                QMessageBox.critical(self, "Ошибка редактирования данных", str(e))
-                    else:
-                        QMessageBox.warning(self, "Ошибка", "Тренер не найден.")
-                except mysql.connector.Error as e:
-                    QMessageBox.critical(self, "Ошибка загрузки данных", str(e))
+                            self.cursor.execute(query,
+                                                (lastname, firstname, middlename, birthdate, phone, email, coach_id))
+                            self.conn.commit()
+                            self.load_coaches()
+                        except ValueError as e:
+                            QMessageBox.critical(self, "Ошибка", str(e))
+                        except mysql.connector.Error as e:
+                            QMessageBox.critical(self, "Ошибка редактирования данных", str(e))
+                else:
+                    QMessageBox.warning(self, "Ошибка", "Тренер не найден.")
+            except mysql.connector.Error as e:
+                QMessageBox.critical(self, "Ошибка загрузки данных", str(e))
 
     def delete_trener(self):
         current_item = self.trener_list.currentItem()
@@ -324,10 +324,8 @@ class TrenerTab(QWidget):
             QApplication.quit()
 
     def open_main_window(self):
-        from main import GlavnoeMenuTab  # Импортируем внутри функции
-        self.glavnoe_menu_tab = GlavnoeMenuTab()  # Создаём экземпляр GlavnoeMenuTab
-        self.glavnoe_menu_tab.show()  # Показываем GlavnoeMenuTab
-        self.close()  # Закрываем текущий виджет TrenerTab
+        self.main_window.show_glavnoe_menu()
+
 
 class TrenerDialog(QDialog):
     def __init__(self, data=None):
@@ -477,7 +475,7 @@ class TrenerDialog(QDialog):
         # Кнопки ОК и Отмена с улучшенным стилем
         button_layout = QHBoxLayout()
 
-        ok_button = QPushButton("ОК")
+        ok_button = QPushButton("Сохранить")
         ok_button.setStyleSheet("""
             QPushButton {
                 background-color: #388E3C;
@@ -535,9 +533,3 @@ class TrenerDialog(QDialog):
             self.phone_edit.text(),
             self.email_edit.text()
         )
-
-
-
-
-
-

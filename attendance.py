@@ -1,13 +1,14 @@
 import mysql.connector
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QListWidget, QLabel, QTableWidget, \
-    QTableWidgetItem, QCheckBox, QPushButton, QSpacerItem, QSizePolicy, QApplication
+    QTableWidgetItem, QCheckBox, QPushButton, QSpacerItem, QSizePolicy, QApplication, QMessageBox
 from PyQt6.QtCore import QDate, QSize
 
 
 class PoseshhenieTab(QWidget):
-    def __init__(self):
+    def __init__(self,main_window):
         super().__init__()
+        self.main_window = main_window  # Получаем доступ к основному окну
 
         self.conn = None
         self.cursor = None
@@ -198,7 +199,7 @@ class PoseshhenieTab(QWidget):
         bottom_buttons_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         exit_button = QPushButton("Выход")
-        exit_button.clicked.connect(QApplication.quit)
+        exit_button.clicked.connect(self.exit_application)
         bottom_buttons_layout.addWidget(exit_button)
 
         main_layout.addLayout(bottom_buttons_layout)
@@ -209,10 +210,10 @@ class PoseshhenieTab(QWidget):
         """Подключение к базе данных"""
         try:
             self.conn = mysql.connector.connect(
-                host="127.0.0.1",
-                user="root",
-                password="123456qwerty",
-                database="cursovaya"
+                host="",
+                user="",
+                password="",
+                database=""
             )
             self.cursor = self.conn.cursor()
         except mysql.connector.Error as e:
@@ -398,6 +399,13 @@ class PoseshhenieTab(QWidget):
         except Exception as e:
             print(f"Ошибка при сохранении данных о посещаемости: {e}")
 
+    def exit_application(self):
+        """Обработчик кнопки выхода с подтверждением"""
+        reply = QMessageBox.question(self, "Выход", "Вы уверены, что хотите выйти?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            QApplication.quit()
+
     def open_main_window(self):
-        """Открыть главное окно"""
-        print("Открытие главного окна")
+        self.main_window.show_glavnoe_menu()
+

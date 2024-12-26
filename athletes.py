@@ -7,8 +7,9 @@ from PyQt6.QtCore import QSize, Qt, QDate
 
 
 class SportsmeniTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window):
         super().__init__()
+        self.main_window = main_window  # Получаем доступ к основному окну
 
         self.conn = None
         self.cursor = None
@@ -148,10 +149,10 @@ class SportsmeniTab(QWidget):
         """Подключение к базе данных"""
         try:
             self.conn = mysql.connector.connect(
-                host="127.0.0.1",
-                user="root",
-                password="123456qwerty",
-                database="cursovaya"
+                host="",
+                user="",
+                password="",
+                database=""
             )
             self.cursor = self.conn.cursor()
         except mysql.connector.Error as e:
@@ -170,7 +171,7 @@ class SportsmeniTab(QWidget):
             athletes = self.cursor.fetchall()
             for row in athletes:
                 athlete_id, surname, name, patronymic, birth_date, phone, group_name = row
-                self.sportsmeni_list.addItem(f"{surname} {name} {patronymic} | {birth_date} | {phone} | Группа: {group_name}")
+                self.sportsmeni_list.addItem(f"{athlete_id}: {surname} {name} {patronymic} | {birth_date} | {phone} | Группа: {group_name}")
         except Exception as e:
             print(f"Error executing query: {e}")
 
@@ -223,11 +224,14 @@ class SportsmeniTab(QWidget):
 
     def exit_application(self):
         """Выход из приложения"""
-        QApplication.quit()
+        reply = QMessageBox.question(self, "Выход", "Вы уверены, что хотите выйти?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            QApplication.quit()
 
     def open_main_window(self):
-        """Открытие главного окна"""
-        print("Открытие главного окна")
+        self.main_window.show_glavnoe_menu()
+
 
 class SportsmeniDialog(QDialog):
     def __init__(self, parent, athlete_id=None):
@@ -266,7 +270,8 @@ class SportsmeniDialog(QDialog):
         self.patronymic_input.setStyleSheet(self.surname_input.styleSheet())
 
         self.birth_date_input = QDateEdit()
-        self.birth_date_input.setCalendarPopup(True)
+        self.birth_date_input.setDisplayFormat("dd.MM.yyyy")  # Устанавливаем формат даты
+        self.birth_date_input.setDate(QDate.currentDate())  # Устанавливаем текущую дату по умолчанию
         self.birth_date_input.setStyleSheet("""
             QDateEdit {
                 border: 2px solid #388E3C;
@@ -274,6 +279,25 @@ class SportsmeniDialog(QDialog):
                 padding: 10px;
                 font-size: 16px;
                 font-family: 'Arial', sans-serif;
+            }
+            QDateEdit:focus {
+                border-color: #4CAF50;
+            }
+
+            /* Скрытие стрелочек */
+            QDateEdit::down-button, QDateEdit::up-button {
+                width: 0px;
+                height: 0px;
+                border: none;
+                background: transparent;
+            }
+
+            /* Убираем кнопку календаря */
+            QDateEdit::calendar-button {
+                width: 0px;
+                height: 0px;
+                border: none;
+                background: transparent;
             }
         """)
 
@@ -297,8 +321,12 @@ class SportsmeniDialog(QDialog):
         if athlete_id:
             self.load_athlete_data(athlete_id)
 
-        layout.addRow(QLabel("Фамилия:"), self.surname_input)
-        layout.addRow(QLabel("Имя:"), self.name_input)
+        # Размещение Фамилии и Имени в одной строке
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(self.surname_input)
+        name_layout.addWidget(self.name_input)
+
+        layout.addRow(QLabel("Фамилия Имя:"), name_layout)  # Фамилия и Имя в одной строке
         layout.addRow(QLabel("Отчество:"), self.patronymic_input)
         layout.addRow(QLabel("Дата рождения:"), self.birth_date_input)
         layout.addRow(QLabel("Номер телефона:"), self.phone_input)
@@ -392,3 +420,4 @@ class SportsmeniDialog(QDialog):
         phone = self.phone_input.text()
         group = self.group_combobox.currentText()
         return surname, name, patronymic, birth_date, phone, group
+
